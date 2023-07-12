@@ -1,0 +1,333 @@
+// Analyse your messenger chats. You have to download file .json from facebook site with your messages.
+// Later copy all of message files to the data dictionary in this program dictionary and run.
+
+#include <iostream>
+#include <filesystem>
+#include <fstream>
+#include <string>
+#include <map>
+#include <time.h>
+
+// Calculates all send messages (photos and videos) in given string
+int oneFileMessages(const std::string& htmlContent) {
+    size_t pozycja = htmlContent.find("sender_name");
+    int counter = 0;
+
+    while (pozycja != std::string::npos) {
+        counter++;
+        pozycja = htmlContent.find("sender_name", pozycja + 1);
+    }
+
+    return counter;
+}
+
+// Calculates all send messages (photos and videos) in all message files in dictionary
+void messagesNumber() {
+    std::filesystem::path currentPath = std::filesystem::current_path();
+    std::string base = currentPath.parent_path().string() + "\\data\\message_";
+    std::stringstream ss;
+
+    int num = 1;
+    ss << num;
+    std::ifstream inputFile(base + ss.str() + ".json");
+    int messagesNumber = 0;
+
+    while (inputFile) {
+        std::string htmlContent((std::istreambuf_iterator<char>(inputFile)),std::istreambuf_iterator<char>());
+        messagesNumber += oneFileMessages(htmlContent);
+        //std::cout << htmlContent;
+        inputFile.close();
+        num++;
+        ss.str(""); // flush
+        ss << num;
+        inputFile.open(base + ss.str() + ".json"); // Otwórz nowy plik
+    }
+    std::cout << "Number of messages: " << messagesNumber << std::endl;
+}
+
+// Calculates all send messages (photos and videos) of every user in given string
+void userMessages(const std::string& htmlContent, std::map<std::string, int>& users) {
+    size_t pozycja = htmlContent.find("sender_name");
+
+    while (pozycja != std::string::npos) {
+        std::string name;
+        while (htmlContent[pozycja + 15] != '"') {
+            name += htmlContent[pozycja + 15];
+            pozycja++;
+        }
+        auto isUser = users.find(name);
+        if (isUser != users.end()) {
+            users[name]++;
+        }
+        else {
+            users.insert(std::make_pair(name, 1));
+        }
+        pozycja = htmlContent.find("sender_name", pozycja + 1);
+    }
+}
+
+std::string deleteDoubleSlash(const std::string& example) {
+    std::string result;
+    for (int i = 0; i < example.length(); i++) {
+        result += example[i];
+    }
+    return result;
+}
+
+// Calculates all send messages (photos and videos) of every user in given string, number of all messages and percentage for every user
+void messagesInfoJson() {
+    std::filesystem::path currentPath = std::filesystem::current_path();
+    std::string base = currentPath.parent_path().string() + "\\data\\message_";
+    std::stringstream ss;
+    std::map<std::string, int> users;
+
+    int num = 1;
+    ss << num;
+    std::ifstream inputFile(base + ss.str() + ".json");
+
+    while (inputFile) {
+        std::string htmlContent((std::istreambuf_iterator<char>(inputFile)),std::istreambuf_iterator<char>());
+        userMessages(htmlContent, users);
+        inputFile.close();
+        num++;
+        ss.str(""); // flush
+        ss << num;
+        inputFile.open(base + ss.str() + ".json"); // Otwórz nowy plik
+    }
+
+    std::map<std::string, int>::iterator it;
+    int messagesNumber = 0;
+
+    for (it = users.begin(); it != users.end(); ++it) {
+        messagesNumber += it->second;
+    }
+    std::cout << "Number of all messages: " << messagesNumber << std::endl;
+
+    for (it = users.begin(); it != users.end(); ++it) {
+        //std::cout << it->first;
+        std::string inputString = deleteDoubleSlash(it->first);
+        std::cout << inputString;
+        //std::wcout << std::wstring_convert<std::codecvt_utf8_utf16<wchar_t>>().from_bytes(inputString);
+        std::cout << ": " << it->second << " (" << std::setprecision( 3) << std::fixed << (double)it->second/messagesNumber*100 << "%)" << std::endl;
+    }
+}
+
+// Calculates complete length of messages of every user in given string
+void oneFileLength(const std::string& htmlContent, std::map<std::string, long>& users) {
+    size_t pozycja = htmlContent.find("sender_name");
+
+    while (pozycja != std::string::npos) {
+        std::string name;
+        while (htmlContent[pozycja + 15] != '"') {
+            name += htmlContent[pozycja + 15];
+            pozycja++;
+        }
+        auto isUser = users.find(name);
+        if (isUser == users.end()) {
+            users.insert(std::make_pair(name, 0));
+        }
+        //"      \"content\": \""
+        size_t messagePosition = htmlContent.find('\n', pozycja + 1);
+        messagePosition = htmlContent.find('\n', messagePosition + 1);
+        // searched line
+        std::string searchedLine = htmlContent.substr(messagePosition + 1, 18);
+        if (searchedLine.find("      \"content\": \"") != std::string::npos) {
+            //std::cout << searchedLine << " " << htmlContent[messagePosition + 18] << std::endl;
+            while (htmlContent[messagePosition + 19] != '"') {
+                users[name]++;
+                messagePosition++;
+            }
+        }
+        // else video or photo
+
+        pozycja = htmlContent.find("sender_name", pozycja + 1);
+    }
+}
+
+// Calculates complete length of messages of every user in all files and average length for every user
+void messageLength() {
+    std::filesystem::path currentPath = std::filesystem::current_path();
+    std::string base = currentPath.parent_path().string() + "\\data\\message_";
+    std::stringstream ss;
+    std::map<std::string, int> usersMess;
+    std::map<std::string, long> usersLength;
+
+    int num = 1;
+    ss << num;
+    std::ifstream inputFile(base + ss.str() + ".json");
+
+    while (inputFile) {
+        std::string htmlContent((std::istreambuf_iterator<char>(inputFile)),std::istreambuf_iterator<char>());
+        userMessages(htmlContent, usersMess);
+        oneFileLength(htmlContent, usersLength);
+        inputFile.close();
+        num++;
+        ss.str(""); // flush
+        ss << num;
+        inputFile.open(base + ss.str() + ".json"); // Otwórz nowy plik
+    }
+
+    std::map<std::string, int>::iterator it;
+    for (it = usersMess.begin(); it != usersMess.end(); ++it) {
+        //std::cout << it->first;
+        std::string inputString = deleteDoubleSlash(it->first);
+        std::cout << inputString << ": ";
+        //std::wcout << std::wstring_convert<std::codecvt_utf8_utf16<wchar_t>>().from_bytes(inputString);
+        //std::cout << " " << usersLength[it->first] << " " << it->second << std::endl;
+        std::cout << std::setprecision( 3) << std::fixed << (double)usersLength[it->first] / it->second <<
+                ",  " << usersLength[it->first] << std::endl;
+    }
+}
+
+// Calculates number of send photos/videos/gifs of every user in given string
+void oneFilePhoto(const std::string& htmlContent, std::map<std::string, int>& users) {
+    size_t pozycja = htmlContent.find("sender_name");
+
+    while (pozycja != std::string::npos) {
+        std::string name;
+        while (htmlContent[pozycja + 15] != '"') {
+            name += htmlContent[pozycja + 15];
+            pozycja++;
+        }
+        auto isUser = users.find(name);
+        if (isUser == users.end()) {
+            users.insert(std::make_pair(name, 0));
+        }
+        size_t messagePosition = htmlContent.find('\n', pozycja + 1);
+        messagePosition = htmlContent.find('\n', messagePosition + 1);
+        // searched line
+        std::string searchedLine = htmlContent.substr(messagePosition + 1, 18);
+        if (searchedLine.find("      \"content\": \"") == std::string::npos && searchedLine.find("      \"is_unsent\"") == std::string::npos) {
+            std::cout << searchedLine << std::endl;
+            //std::cout << searchedLine << " " << htmlContent[messagePosition + 18] << std::endl;
+            users[name]++;
+        }
+        // else message
+
+        pozycja = htmlContent.find("sender_name", pozycja + 1);
+    }
+}
+
+// Calculates number of send photos/videos/gifs of every user
+void photoNumber() {
+    std::filesystem::path currentPath = std::filesystem::current_path();
+    std::string base = currentPath.parent_path().string() + "\\data\\message_";
+    std::stringstream ss;
+    std::map<std::string, int> users;
+
+    int num = 1;
+    ss << num;
+    std::ifstream inputFile(base + ss.str() + ".json");
+
+    while (inputFile) {
+        std::string htmlContent((std::istreambuf_iterator<char>(inputFile)),std::istreambuf_iterator<char>());
+        oneFilePhoto(htmlContent, users);
+        inputFile.close();
+        num++;
+        ss.str(""); // flush
+        ss << num;
+        inputFile.open(base + ss.str() + ".json"); // Otwórz nowy plik
+    }
+
+    std::map<std::string, int>::iterator it;
+    for (it = users.begin(); it != users.end(); ++it) {
+        //std::cout << it->first;
+        std::string inputString = deleteDoubleSlash(it->first);
+        std::cout << inputString << ": ";
+        //std::wcout << std::wstring_convert<std::codecvt_utf8_utf16<wchar_t>>().from_bytes(inputString);
+        //std::cout << " " << usersLength[it->first] << " " << it->second << std::endl;
+        std::cout << users[it->first] << std::endl;
+    }
+}
+
+// Searching for first message of the user
+std::string oneFileDate(const std::string& htmlContent, const std::string& username) {
+    size_t pozycja = htmlContent.find("sender_name");
+
+    while (pozycja != std::string::npos) {
+        std::string name;
+        while (htmlContent[pozycja + 15] != '"') {
+            name += htmlContent[pozycja + 15];
+            pozycja++;
+        }
+        if (name == username) {
+            size_t messagePosition = htmlContent.find('\n', pozycja + 1);
+            //messagePosition = htmlContent.find('\n', messagePosition + 1);
+            // searched line
+            std::string searchedLine = htmlContent.substr(messagePosition + 22, 13);
+            return searchedLine;
+        }
+        pozycja = htmlContent.find("sender_name", pozycja + 1);
+    }
+
+    return "";
+}
+
+// Searching for first message of the user in all files
+std::string userDate(const std::string& username) {
+    std::filesystem::path currentPath = std::filesystem::current_path();
+    std::string base = currentPath.parent_path().string() + "\\data\\message_";
+    std::stringstream ss;
+
+    int num = 1;
+    ss << num;
+    std::ifstream inputFile(base + ss.str() + ".json");
+
+    while (inputFile) {
+        std::string htmlContent((std::istreambuf_iterator<char>(inputFile)),std::istreambuf_iterator<char>());
+        std::string result = oneFileDate(htmlContent, username);
+        if (result != "") return result;
+
+        inputFile.close();
+        num++;
+        ss.str(""); // flush
+        ss << num;
+        inputFile.open(base + ss.str() + ".json"); // Otwórz nowy plik
+    }
+
+    return "";
+}
+int main() {
+    std::cout << "Analyse your Messanger conversations!" << std::endl << std::endl;
+    while (true) {
+        int num = 0;
+        std::cout << "1. Number of all messages in conversation" << std::endl;
+        std::cout << "2. Messages number of all users and percentage" << std::endl;
+        std::cout << "3. Complete number of written characters and average length of message of all users" << std::endl;
+        std::cout << "4. Complete number of send photos/videos/gifs of all users" << std::endl;
+        std::cout << "5. Find a date when someone wrote the first message" << std::endl;
+        std::cout << "Write a number and see stats: " << std::endl;
+        std::cin >> num;
+
+        switch (num) {
+            case 1:
+                messagesNumber();
+                break;
+            case 2:
+                messagesInfoJson();
+                break;
+            case 3:
+                messageLength();
+                break;
+            case 4:
+                photoNumber();
+                break;
+            case 5:
+                std::cout << "Write username:" << std::endl;
+                std::string username;
+                std::getline(std::cin, username); // ignore
+                std::getline(std::cin, username);
+                std::string helper = userDate(username);
+                time_t userdate = stoi(helper);
+                std::cout << username << " first message was: " << ctime(&userdate);
+                break;
+        }
+
+        char x;
+        std::cout << std::endl << "Do you want to continue? (Y/N): " << std::endl;
+        std::cin >> x;
+        if (x == 'N') break;
+
+    }
+    return 0;
+}
